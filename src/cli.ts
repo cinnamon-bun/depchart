@@ -1,5 +1,10 @@
 import { ArgumentParser } from 'argparse';
-import { extractImportsFromFile } from './lib';
+import {
+    FileNode,
+    extractImportsFromFile,
+    getAllNodes,
+    splitToFilesAndPackages
+} from './lib';
 
 let log = console.log;
 
@@ -10,12 +15,17 @@ let main = () => {
     });
     parser.add_argument('-x', '--exclude', { help: 'Exclude these files', nargs: '*' });
     parser.add_argument('-o', '--output', { help: 'Output file' });
-    parser.add_argument('rootFile');
+    parser.add_argument('sourceFiles', { nargs: '+' });
     let args = parser.parse_args();
-    let rootFile: string = args.rootFile;
+    let sourceFiles: string[] = args.sourceFiles;
 
     log(args);
+    let allNodes = getAllNodes(sourceFiles);
+    let { fileNodes, packageNodes } = splitToFilesAndPackages(allNodes);
 
-    log(extractImportsFromFile(rootFile));
+    log('----------')
+    log(fileNodes);
+    log('----------')
+    log(packageNodes);
 };
 main();
