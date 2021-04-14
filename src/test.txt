@@ -1,0 +1,39 @@
+import defaultExport from "p01";
+import * as name from "p02"; // comment
+import { export1 } from "p03";
+import { export1 as alias1 } from 'p04'
+import { export1 , export2 } from "p05"  // comment
+import {
+    blah,
+    baz,
+} from 'p06';
+
+// foo
+import { foo , bar } from "p07";
+import { export1 , export2 as alias2 , [...] } from "p08";
+import defaultExport, { export1 [ , [...] ] } from "p09";
+import defaultExport, * as name from "p10";
+import "p11";
+
+import x = require('p12');
+import x = require('p13')
+import x = require('p14');  // comment
+import x = require('p15')  // comment
+import x = require("p16");
+import x = require("p17")
+import x = require("p18");  // comment
+import x = require("p19")  // comment
+
+import defaultExport from "path01/long/path";
+import defaultExport from "path02/lo-ng/pa_th/with.symbols";
+import defaultExport from "./path03/relative/path";
+import defaultExport from "../path04/relative/path";
+
+var promise = import('promise01');
+var promise = import('promise02')
+var promise = import('promise03');  // comment
+var promise = import('promise04')  // comment
+var promise = import("promise05");
+var promise = import("promise06")
+var promise = import("promise07");  // comment
+var promise = import("promise08")  // comment
