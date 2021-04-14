@@ -24,16 +24,16 @@ let main = () => {
     sourceFiles = sourceFiles.filter(p => excludeFiles.indexOf(p) === -1);
 
     log(args);
-    log('----------')
+    log('---------- file nodes')
     let fileNodes = sourceFiles.map(getFileNode);
     resolveDeps(fileNodes);
     log(fileNodes);
-    log('----------')
+    //log('---------- package nodes')
     let packageNodes = makePackageNodes(fileNodes);
-    log(packageNodes);
-    log('----------')
+    //log(packageNodes);
+    log('---------- dot')
     let dot = makeDot(fileNodes, packageNodes);
-    log(dot);
+    //log(dot);
 
     if (args.output) {
         fs.writeFileSync(args.output, dot, 'utf-8');

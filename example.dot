@@ -1,0 +1,30 @@
+digraph G {
+    splines=line;
+    rankdir=LR;
+
+
+    a0 [label="solid (default)", shape=box, style=solid;  color=red];
+    a1 [label="fontcolor",       shape=box, style=solid;  fontcolor=red];
+    a2 [label="bold",            shape=box, style=bold;   color=red];
+    a3 [label="filled no edge",  shape=box, style=filled; color=red];
+    a4 [label="filled w edge",   shape=box, style=filled; color=red, fillcolor=green];
+
+    file1;
+
+
+    subgraph cluster1 {
+        label="test/";
+        file2;
+
+        subgraph cluster2 {
+            label="test/deeper/";
+            file3;
+        }
+
+    }
+
+    file1 -> file2 [style=dashed]
+    file1 -> file2 [color=red]
+    file1 -> file2 [penwidth=3]
+
+}

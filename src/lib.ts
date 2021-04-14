@@ -1,11 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { _matchAll } from './util';
+import {
+    getParentDirname,
+    indent,
+    matchAll,
+    removeFileExt,
+    uuid,
+} from './util';
+
+// for testing
 import { deep } from './subfolder/deeper-file';
 import { shallow } from './shallower-file';
 
 let log = console.log;
+
+//================================================================================
 
 export interface FileNode {
     kind: 'package' | 'file';
@@ -24,8 +34,8 @@ export let getFileNode = (srcPath: string): FileNode => {
     // var promise = import('foo')
     let regex2 = /^[^\/]*? = import\(['"](?<path>.*?)['"]\)/gms
 
-    let matches = _matchAll(regex1, content)
-        .concat(_matchAll(regex2, content));
+    let matches = matchAll(regex1, content)
+        .concat(matchAll(regex2, content));
 
     let fileDeps: string[]  = [];
     let packageDeps: string[]  = [];
@@ -49,19 +59,12 @@ export let getFileNode = (srcPath: string): FileNode => {
     }
 }
 
-export let removeFileExt = (path: string): string => {
-    // remove the final '.' and everything after it
-    let parts = path.split('.');
-    if (parts.length > 1) {
-        parts = parts.slice(0, -1);
-    }
-    return parts.join('.');
-}
-
 export let resolveDeps = (allNodes: FileNode[]): void => {
-    // mutate it
+    // set the resolvedFileDeps array by turning '../foo' into 'src/foo.ts'
+    // mutate the inputs
 
-    // src/cli --> src/cli.ts
+    // make map of existing files so we can find them to put the file extension back on the end
+    //    src/cli --> src/cli.ts
     let extAdder = new Map<string, string>();
     for (let node of allNodes) {
         if (node.kind !== 'file') { continue; }
@@ -83,6 +86,7 @@ export let resolveDeps = (allNodes: FileNode[]): void => {
 }
 
 export let makePackageNodes = (fileNodes: FileNode[]): FileNode[] => {
+    // find packages mentioned by the fileNodes and make packageNodes for them
     let seen = new Set<string>();
     let packageNodes: FileNode[] = [];
     for (let fileNode of fileNodes) {
@@ -102,14 +106,70 @@ export let makePackageNodes = (fileNodes: FileNode[]): FileNode[] => {
     return packageNodes;
 }
 
+// turn fileNodes into a tree
+interface TreeNode {
+    fullDirname: string,
+    thisDirname: string,
+    parentDirname: string,
+    fileNodes: FileNode[],
+    subtrees: TreeNode[],
+}
+export let makeNodeTrees = (fileNodes: FileNode[]): TreeNode[] => {
+    // first make a flat pile of treeNodes
+    // using fullDirname as their ids
+    let treeNodesByFullDirname = new Map<string, TreeNode>();  // keyed by fullDirname
+    for (let fileNode of fileNodes) {
+        let thisDirname = getParentDirname(fileNode.srcPath);
+        let fullDirname = path.dirname(fileNode.srcPath);
+        let parentDirname = getParentDirname(fullDirname);
+        let treeNode = treeNodesByFullDirname.get(fullDirname) ?? {
+            fullDirname,
+            thisDirname,
+            parentDirname,
+            fileNodes: [],
+            subtrees: [],
+        }
+        treeNode.fileNodes.push(fileNode);
+        treeNodesByFullDirname.set(fullDirname, treeNode);
+    }
+
+    // link parents to children
+    // and make a set of root trees which have no parents
+    let rootTrees: TreeNode[] = [];
+    for (let childTreeNode of treeNodesByFullDirname.values()) {
+        let parentTreeNode = treeNodesByFullDirname.get(childTreeNode.parentDirname);
+        if (parentTreeNode !== undefined && parentTreeNode !== childTreeNode) {
+            parentTreeNode.subtrees.push(childTreeNode);
+        } else {
+            rootTrees.push(childTreeNode);
+        }
+    }
+
+    log('-------------------- flat pile of treeNodes');
+    log(treeNodesByFullDirname);
+    log('');
+
+    log('');
+    log('-------------------- tree roots');
+    for (let root of rootTrees) {
+        log('===========');
+        log(root);
+    }
+
+    return rootTrees;
+}
+
 export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[]): string => {
+
+    let rootTrees = makeNodeTrees(fileNodes);
+
     let result: string[] = [];
 
     let fileNodeStyle = `shape=rectangle; style="rounded,filled"; color=darkslategray3`;
     let fileEdgeStyle = `penwidth=2; color=darkslategray4`;
 
     let packNodeStyle = `shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4`;
-    let packEdgeStyle = `penwidth=1.5; style=dashed, color=cornsilk4, weight=1`;
+    let packEdgeStyle = `penwidth=1.5; style=dashed, color=cornsilk4, weight=0.1`;
 
     result.push(`
 digraph G {
@@ -124,14 +184,62 @@ digraph G {
     `);
     result.push();
 
+    let treeToDot = (tree: TreeNode, depth: number = 0): string => {
+        let result: string[] = [];
+        let clusterLabel = tree.thisDirname === '.' ? 'root' : tree.thisDirname;
+        if (depth === 0) {
+            result.push(`
+    subgraph cluster${uuid()} {
+        label=<<b>${clusterLabel}</b>>;
+        style="rounded";
+        color=bisque4;
+        penwidth=2;
+            `);
+        } else {
+            result.push(`
+    subgraph cluster${uuid()} {
+        label=<<b>${clusterLabel}</b>>;
+        style="rounded,filled";
+        fillcolor=bisque;
+        color=bisque4;
+        penwidth=2;
+            `);
+        }
+        for (let node of tree.fileNodes) {
+            let label = path.basename(node.srcPath);
+            result.push(`        "${node.srcPath}" [label="${label}", ${fileNodeStyle}];`);
+        }
+        for (let subtree of tree.subtrees) {
+            result.push(indent(treeToDot(subtree, depth + 1)));
+        }
+        result.push('    }');
+        return result.join('\n');
+    }
+
     result.push('    // files in their folder clusters');
+    for (let root of rootTrees) {
+        result.push(treeToDot(root));
+    }
+    /*
     for (let node of fileNodes) {
         let label = path.basename(node.srcPath);
         result.push(`    "${node.srcPath}" [label="${label}", ${fileNodeStyle}];`);
     }
+    */
     result.push('');
 
     result.push('    // packages in their own cluster');
+    result.push(`
+    subgraph cluster2 {
+        label=<<b>node_modules</b>>;
+        color=cornsilk3;
+        penwidth=3;
+        style="rounded";
+    `);
+    for (let node of packageNodes) {
+        result.push(`        "${node.srcPath}" [${packNodeStyle}];`);
+    }
+    result.push('}');
     result.push('');
 
     result.push('    // edges between files');
@@ -143,6 +251,11 @@ digraph G {
     result.push('');
 
     result.push('    // edges from files to packages');
+    for (let node of fileNodes) {
+        for (let dep of node.packageDeps) {
+            result.push(`    "${node.srcPath}" -> "${dep}" [${packEdgeStyle}];`);
+        }
+    }
     result.push('');
 
     result.push(`}`);
