@@ -145,21 +145,23 @@ export let makeNodeTrees = (fileNodes: FileNode[]): TreeNode[] => {
         }
     }
 
-    log('-------------------- flat pile of treeNodes');
-    log(treeNodesByFullDirname);
-    log('');
+    //log('-------------------- flat pile of treeNodes');
+    //log(treeNodesByFullDirname);
+    //log('');
 
-    log('');
-    log('-------------------- tree roots');
-    for (let root of rootTrees) {
-        log('===========');
-        log(root);
-    }
+    //log('');
+    //log('-------------------- tree roots');
+    //for (let root of rootTrees) {
+    //    log('===========');
+    //    log(root);
+    //}
 
     return rootTrees;
 }
 
-export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[]): string => {
+export type Rankdir = 'TB' | 'BT' | 'LR' | 'RL';
+
+export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[], includePackages: boolean, rankdir: Rankdir = 'TB'): string => {
 
     let rootTrees = makeNodeTrees(fileNodes);
 
@@ -169,13 +171,13 @@ export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[]): string =
     let fileEdgeStyle = `penwidth=2; color=darkslategray4`;
 
     let packNodeStyle = `shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4`;
-    let packEdgeStyle = `penwidth=1.5; style=dashed, color=cornsilk4, weight=0.1`;
+    let packEdgeStyle = `penwidth=1.5; style=dashed, color=cornsilk4, weight=1`;
 
     result.push(`
 digraph G {
     //splines=line;
     splines=true;
-    rankdir=TB;
+    rankdir=${rankdir};
     newrank=true;
     compound=true;
     graph [fontname = "helvetica"];
@@ -228,19 +230,21 @@ digraph G {
     */
     result.push('');
 
-    result.push('    // packages in their own cluster');
-    result.push(`
-    subgraph cluster2 {
+    if (includePackages) {
+        result.push('    // packages in their own cluster');
+        result.push(`
+    subgraph clusterPackages {
         label=<<b>node_modules</b>>;
         color=cornsilk3;
         penwidth=3;
         style="rounded";
-    `);
-    for (let node of packageNodes) {
-        result.push(`        "${node.srcPath}" [${packNodeStyle}];`);
+        `);
+        for (let node of packageNodes) {
+            result.push(`        "${node.srcPath}" [${packNodeStyle}];`);
+        }
+        result.push('}');
+        result.push('');
     }
-    result.push('}');
-    result.push('');
 
     result.push('    // edges between files');
     for (let node of fileNodes) {
@@ -250,13 +254,15 @@ digraph G {
     }
     result.push('');
 
-    result.push('    // edges from files to packages');
-    for (let node of fileNodes) {
-        for (let dep of node.packageDeps) {
-            result.push(`    "${node.srcPath}" -> "${dep}" [${packEdgeStyle}];`);
+    if (includePackages) {
+        result.push('    // edges from files to packages');
+        for (let node of fileNodes) {
+            for (let dep of node.packageDeps) {
+                result.push(`    "${node.srcPath}" -> "${dep}" [${packEdgeStyle}];`);
+            }
         }
+        result.push('');
     }
-    result.push('');
 
     result.push(`}`);
 
