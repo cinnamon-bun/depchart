@@ -1,7 +1,10 @@
+#!/usr/bin/env node
+
 import * as fs from 'fs';
+import * as child_process from 'child_process';
 import { ArgumentParser } from 'argparse';
+
 import {
-    FileNode,
     Rankdir,
     getFileNode,
     makeDot,
@@ -14,67 +17,87 @@ let log = console.log;
 let main = () => {
 
     let parser = new ArgumentParser({
-        description: 'Make a dependency chart between source code files.',
+        description: 'Make a dependency chart showing the import relationships between the source code files in a directory.',
     });
-    parser.add_argument('-x', '--exclude', { help: 'Exclude these files', nargs: '*' });
-    parser.add_argument('-o', '--output', { help: 'Output file' });
-    parser.add_argument('-n', '--node_modules', { help: 'include node_modules', action: 'store_true' });
-    parser.add_argument('-r', '--rankdir', { help: 'direction: TB | BT | LR | RL' });
     parser.add_argument('sourceFiles', { nargs: '+' });
+    parser.add_argument('-x', '--exclude', { help: 'Exclude these files.  You can use glob patterns here.', nargs: '*' });
+    parser.add_argument('-o', '--output', { help: 'Output file basename (default: "depchart")' });
+    parser.add_argument('-n', '--node_modules', { help: 'Include node_modules (default: false)', action: 'store_true' });
+    parser.add_argument('--open', { help: 'Show the resulting image (MacOS only)', action: 'store_true' });
+    parser.add_argument('-r', '--rankdir', { help: 'Layout direction: TB | BT | LR | RL (default: TB)' });
     let args = parser.parse_args();
-    let includePackages = !!args.node_modules;
-    let outputFn: string | undefined = args.output;
-    let excludeFiles: string[] = args.exclude ?? [];
+
     let sourceFiles: string[] = args.sourceFiles;
+    let excludeFiles: string[] = args.exclude ?? [];
+    let outputBasename: string = args.output || 'depchart';
+    let includePackages: boolean = !!args.node_modules;
+    let openImage: boolean = !!args.open;
     let rankdir: Rankdir = ((args.rankdir ?? 'TB') as string).toUpperCase() as Rankdir
+
     if (['TB', 'BT', 'LR', 'RL'].indexOf(rankdir) === -1) {
         console.error('ERROR: rankdir must be TB, BT, LR, or RL');
         process.exit(1);
     }
 
-    //// apply exclusions
-    //sourceFiles = sourceFiles.filter(p => excludeFiles.indexOf(p) === -1);
+    sourceFiles.sort();
+
+    // apply exclusions
     sourceFiles = sourceFiles.filter(path => !path.startsWith('node_modules/'));
 
-    //log(args);
-
     log('---------- files to consider')
+    let excludeFileSet = new Set(excludeFiles);
     for (let sourceFile of sourceFiles) {
-        log(`    ${sourceFile}`);
+        if (!excludeFileSet.has(sourceFile)) {
+            log(`    ${sourceFile}`);
+        }
     }
 
-    //log('---------- file nodes')
+    // load and process files
     let fileNodes = sourceFiles.map(getFileNode);
     resolveDeps(fileNodes);
 
-    log(excludeFiles);
     // delete fileNodes for excluded files
-    fileNodes = fileNodes.filter(n => excludeFiles.indexOf(n.srcPath) === -1);
+    fileNodes = fileNodes.filter(n => !excludeFileSet.has(n.srcPath));
+
     // remove references from good files to excluded files
     for (let fileNode of fileNodes) {
-        log('')
-        log(fileNode.resolvedFileDeps);
-        fileNode.resolvedFileDeps = fileNode.resolvedFileDeps.filter(x => excludeFiles.indexOf(x) === -1);
-        log(fileNode.resolvedFileDeps);
-        fileNode.resolvedFileDeps = fileNode.resolvedFileDeps.filter(x => excludeFiles.indexOf(x) === -1);
+        //log('')
+        //log(fileNode.resolvedFileDeps);
+        fileNode.resolvedFileDeps = fileNode.resolvedFileDeps.filter(x => !excludeFileSet.has(x));
+        //log(fileNode.resolvedFileDeps);
     }
 
-    // TODO: remove excluded files again from fileDeps
-
-    //log(fileNodes);
-    //log('---------- package nodes')
+    // generate package nodes
     let packageNodes = makePackageNodes(fileNodes);
-    //log(packageNodes);
-    //log('---------- dot')
+
+    // make dot source
     let dot = makeDot(fileNodes, packageNodes, includePackages, rankdir);
-    //log(dot);
+
+    // output files and render to image
+    let outDot = outputBasename + '.dot';
+    let outFormats = ['png', 'svg']; //, 'jpg'];
 
     log();
-    if (outputFn) {
-        fs.writeFileSync(outputFn, dot, 'utf-8');
-        log(`wrote to ${outputFn}`);
-    } else {
-        log('did not write; use "-o out.dot" to specify an output DOT filename');
+    log('rendering...');
+    fs.writeFileSync(outDot, dot, 'utf-8');
+    log(`    wrote to "${outDot}"`);
+
+    let dotCmds = outFormats.map(format =>
+        [`-T`+format, outDot, `-o`, outputBasename + '.' + format],
+    );
+    for (let args of dotCmds) {
+        log('    > dot ' + args.join(' '));
+        let out = child_process.spawnSync('dot', args)
+        if (out.status !== 0) {
+            console.error('ERROR running dot:');
+            log(out.stderr.toString());
+            log(out.stdout.toString());
+        }
+    }
+
+    if (openImage) {
+        log('    opening in Preview...');
+        child_process.execSync(`open "${outputBasename + '.' + outFormats[0]}"`);
     }
 
     /*

@@ -1,14 +1,17 @@
 {
   "name": "depchart",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "",
-  "main": "build/cli.js",
+  "main": "./build/cli.js",
+  "bin": {
+    "depchart": "./build/cli.js"
+  },
   "repository": "",
   "author": "Cinnamon <cinnamon_bun_github@fastmail.com>",
   "homepage": "https://github.com/cinnamon-bun/depchart",
   "license": "AGPL-3.0",
   "scripts": {
-    "clean": "rm -rf build coverage .nyc_output",
+    "clean": "rm -rf build coverage .nyc_output depchart*",
     "build": "tsc",
     "start": "node build/index.js",
     "test": "tap -Rspecy --jobs=1 build/test/*.test.js",

@@ -6,3 +6,7 @@ build/test/
 build/example*
 tsconfig.json
 .vscode/
+*.dot
+*.svg
+*.png
+*.jpg

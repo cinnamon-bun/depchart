@@ -12,6 +12,8 @@ import {
 // for testing
 import { deep } from './subfolder/deeper-file';
 import { shallow } from './shallower-file';
+let x = deep;
+let y = shallow;
 
 let log = console.log;
 
@@ -176,11 +178,12 @@ export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[], includePa
     result.push(`
 digraph G {
     //splines=line;
+    //splines=polyline;
     splines=true;
     rankdir=${rankdir};
-    newrank=true;
+    //newrank=true;
     compound=true;
-    graph [fontname = "helvetica"];
+    graph [fontname = "helvetica"];  // dpi=72
     node [fontname = "helvetica"];
     edge [fontname = "helvetica"];
     `);

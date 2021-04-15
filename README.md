@@ -1,142 +1,121 @@
-# Stone Soup
+# Depchart
 
-**WIP** April 2021
+Makes a dependency chart showing the import relationships between the source code files in a directory.
 
-This is a sketch of ideas for improving the way [Earthstar](https://github.com/earthstar-project/earthstar) is split into classes.
+Requires `graphviz` to be [installed on your system](https://graphviz.org/download/).
 
-Much of Earthstar is just faked here -- signing, document validity checking.
+## Caveats
 
-## Splitting `IStorage` into `Frontend` and `Backend` classes
+This is not very smart; it will find imports inside comments.
 
-This has nothing to do with normal web "frontend" and "backend", I should rename them.
+It uses regular expressions to find [ESM style imports](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import) in every file you throw at it.  You should limit it to source code files using a glob pattern like `src/**.ts*`
 
-Think of this as `IStorageNiceAPIFullOfComplexity` and `IStorageSimpleLowLevelDriver`.
+It's only been tested on Typescript files but it should also work on javascript files as long as they use ESM style imports.
 
-I want to make it easier to add new kinds of storage so I'm splitting IStorage into two parts:
+Supported:
+* All kinds of ESM imports
+* Typescript
+  * `import x = require('foo');`
+  * `let promise = require('foo');`
+* Javascript
+  * `let x = require('foo');`
 
-The Frontend does:
-* the complex annoying stuff
-* set(): sign and add a document
-* ingest(): validate and accept a document from the outside
-* followers and events
-* user-friendly helper functions, getters, setters
+Not supported yet:
+* Typescript
+  * `export * from './foo';`
 
-The Backend does:
-* simple stuff
-* query for documents
-* maintain indexes for querying (hopefully provided by the underlying storage technology)
-* simple upsert of a document
+If an import starts with a period it's considered a local file import; otherwise it's treated as a 3rd party package import and it will only be shown if you use the `--node_modules` option.
 
-Possibly even you can have multiple frontends for one backend, for example when you're using multiple tabs with indexedDb or localStorage.
+## Tweaks
 
-## "Reliable indexing / streaming"
+If the regexes need fine tuning, or you want to add more file types, find them in `lib.ts`.
 
-This shows an implementation of the "reliable indexing" idea discussed in [this issue](https://github.com/earthstar-project/earthstar/issues/66).
+To change the colors, search for `Style` in `lib.ts` and refer to the [graphviz color chart](https://www.graphviz.org/doc/info/colors.html).
 
-### The problem
+## Install
 
-We have livestreaming now, over the network and also to local subscribers, all based on `onWrite` events.
+First, [install graphviz](https://graphviz.org/download/).
 
-If you miss some events, you can't recover -- you have to do a full batch download of every document.
-
-Events also don't tell you what was overwritten, which you might need to know to update a Layer or index.
-
-### The solution: `localIndex`
-
-Each Storage keeps track of the order that it receives documents, and assignes each doc a `localIndex` value which starts at 1 and increments from there with every newly written doc.
-
-This puts the documents in a nice linear order that can be used to reliably stream, and resume streaming, from the Storage.
-
-When we get a new version of a document, it gets a new `localIndex` and goes at the end of the sequence, and the old version vanishes, leaving a gap in the sequence.  It's ok that there are gaps.
-
-The `localIndex` is particular to a certain IStorage.  It's kept in the `Doc` object but it's not really part of it; it's not included in the signature.  It's this IStorage's metadata about that document.
-
-### Querying by localIndex
-
-This lets you easily resume where you left off.  You can get batches of N docs at a time if you want, using the `limit` option.
-
-```ts
-storage.getDocsSinceLocalIndex(
-    startAt: LocalIndex,
-    limit?: number): Doc[];
+Test if graphviz is installed:
+```sh
+dot --version
 ```
 
-(You can also still look up documents by path in the usual old way.)
+Install depchart:
+```sh
+npm install --global depchart
+```
 
-### Followers: Reliable streaming locally, to subscribers or indexes
+## Use
 
-The old `onWrite` events are gone.  Now, there's now a new way to subscribe to a Storage: with a `Follower`.  A follower is like a pointer that moves along the sequence of documents, in order by `localIndex`, running a callback on each one.
+`cd` into the root directory of your source code and run `depchart` there.
 
-This is a Kafka or Kappa-db style architecture.
-
-You could use this to build an index or Layer that incrementally digests the content of an IStorage without ever missing anything, even if it only runs occasionally.  It just resumes from the last `localIndex` it saw, and proceeds from there.
-
-There are 2 kinds of followers:
-
-* Blocking followers must run before a write to the storage will complete.
-
-* Lazy followers run async'ly.  Writing to a storage will wake up a lazy follower, but it might not start running for a little while, and it will catch up to the end at its own speed.
-
-A follower has one callback (sync or async) that it runs on each doc in sequence.  It never allows that callback to overlap with itself, e.g. it waits to finish one doc before moving along to the next.  Both blocking and lazy followers work this way.  The difference between blocking and lazy is if the **IStorage** waits for them or not.
-
-An IStorage may have many followers of both/either blocking and lazy types.
-
-### Starting followers at the beginning or the end
-
-You can start a Follower anywhere in the sequence: at the beginning (good for indexes and Layers), or at the current most recent document (good for live syncing new changes).
-
-* Blocking followers hold up the entire IStorage until they catch up to the end
-
-* Lazy followers just crawl along on their own.
-
-### Reliable streaming over the network, when syncing
-
-(Not implemented in this code yet)
-
-When we send docs over the network we will send the `localIndex` to help the other side track where they are in our own sequence.  The other side will then discard the property and put their own `localIndex` on the document when they store it.
-
-Peers will remember, for each other peer, which is the latest `localIndex` they've seen from that peer, so they can resume syncing from there.
-
-This is similar to how append-only logs are synced in Scuttlebutt and Hyper, except our logs have gaps.
-
-## More informative `onWrite` events
-
-TODO: this is being moved into Followers.
-
-## Slightly different querying
-
-Querying has been made more organized -- see the Query type in `types.ts`.  It looks a bit more like an SQL query but the pieces are written in the order they actually happen, so it's easier to understand.
-
-The order is:
-* history (all or latest only)
-* orderBy
-* startAt (continue from a certain point)
-* filter - the same options, timestamp, pathStartswith, etc etc
-* limit
-
-Also, the `cleanUpQuery` function is fancier and will also figure out if the query will match `all`, `some`, or `nothing` documents.  This helps with optimizations elsewhere.
-
-## Problems left to solve
-
-* Ephemeral documents disappear without leaving a trace, do we need events for that?
-* An IStorage might significantly change or start over, by deleting most of its local documents and choosing a different sync query.  Then we'd need to tell subscribers and peers that we're effectively a different IStorage now.
-  * localIndex could be a tuple `[generation, localIndex]` where generation is an integer that increments on each big change like that
-  * or give each IStorage a UUID which gets randomly changed when big changes happen.  This would be helpful for other reasons too (to prevent echoing back documents to the storage that just gave them back to us, we need to track who gave them to us)
-* Syncing by `localIndex` doesn't work very well when you also have a sync query, because you have to scan the entire sequence to find the couple of docs you care about.  We probably still want another way of efficient syncing that goes in path order and uses hashing in some clever way, sort of like a Merkle tree but not.
-
-## Silly new vocabulary ideas
-
-Very tentative idea to rename Earthstar to Stone Soup.
-
-It's probably a bad idea to use cute names, but:
+The default output name is `depchart`.  This will write `depchart.dot`, `depchart.png`, and `depchart.svg` into your current directory.
 
 ```
-Earthstar       Stone Soup
+Usage:
+  depchart <sourceFiles> <flags>
 
-Workspace       Soup?
-Author          Chef?
-Storage         Bowl, Pot, Cauldron, Crockpot, Saucepan
-Document        Doc
-Pub
-Peer / Node     
+Positional arguments:
+  sourceFiles
+
+Optional arguments:
+  -h, --help            show this help message and exit
+
+  -x [EXCLUDE ...], --exclude [EXCLUDE ...]
+      Exclude these files.  You can use glob patterns here.
+
+  -o OUTPUT, --output OUTPUT
+      Output file basename (default: "depchart")
+
+  -n, --node_modules
+      Include node_modules (default: false)
+
+  --open
+      Show the resulting image (MacOS only)
+
+  -r RANKDIR, --rankdir RANKDIR
+      Layout direction: TB | BT | LR | RL (default: TB)
 ```
+
+## Example output on its own codebase
+
+```sh
+depchart src/**.ts
+```
+
+![](examples/depchart.png)
+
+---
+
+Excluding `subfolder`
+
+Note we have to exclude all the individual files in `subfolder`, we can't just say "subfolder".
+
+```sh
+depchart src/**.ts --exclude subfolder/**
+```
+
+![](examples/depchart-exclude.png)
+
+---
+
+Including node_modules:
+
+This shows the 3rd party packages that are directly included by your own code.  It does not show deeper transitive dependencies.
+
+```sh
+depchart src/**.ts -n
+```
+
+![](examples/depchart-with-packages.png)
+
+---
+
+Changing the flow direction with `rankdir`
+
+```sh
+depchart src/**.ts --rankdir LR
+```
+
+![](examples/depchart-lr.png)
