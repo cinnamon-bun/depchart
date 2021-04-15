@@ -19,6 +19,8 @@ let log = console.log;
 
 //================================================================================
 
+export type PackageStyle = 'omit' | 'integrated' | 'separated' | 'boxed';
+
 export interface FileNode {
     kind: 'package' | 'file';
     srcPath: string;
@@ -163,7 +165,7 @@ export let makeNodeTrees = (fileNodes: FileNode[]): TreeNode[] => {
 
 export type Rankdir = 'TB' | 'BT' | 'LR' | 'RL';
 
-export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[], includePackages: boolean, rankdir: Rankdir = 'TB'): string => {
+export let makeDot = (fileNodes: FileNode[], packageNodes: FileNode[], packageStyle: PackageStyle, rankdir: Rankdir = 'TB'): string => {
 
     let rootTrees = makeNodeTrees(fileNodes);
 
@@ -193,13 +195,15 @@ digraph G {
         let result: string[] = [];
         let clusterLabel = tree.thisDirname === '.' ? 'root' : tree.thisDirname;
         if (depth === 0) {
-            result.push(`
+            if (packageStyle !== 'integrated') {
+                result.push(`
     subgraph cluster${uuid()} {
         label=<<b>${clusterLabel}</b>>;
         style="rounded";
         color=bisque4;
         penwidth=2;
-            `);
+                `);
+            }
         } else {
             result.push(`
     subgraph cluster${uuid()} {
@@ -217,7 +221,9 @@ digraph G {
         for (let subtree of tree.subtrees) {
             result.push(indent(treeToDot(subtree, depth + 1)));
         }
-        result.push('    }');
+        if (depth !== 0 || packageStyle !== 'integrated') {
+            result.push('    }');
+        }
         return result.join('\n');
     }
 
@@ -233,7 +239,7 @@ digraph G {
     */
     result.push('');
 
-    if (includePackages) {
+    if (packageStyle === 'boxed') {
         result.push('    // packages in their own cluster');
         result.push(`
     subgraph clusterPackages {
@@ -247,6 +253,12 @@ digraph G {
         }
         result.push('}');
         result.push('');
+    } else if (packageStyle === 'separated' || packageStyle === 'integrated') {
+        result.push('    // packages not in their own cluster');
+        for (let node of packageNodes) {
+            result.push(`        "${node.srcPath}" [${packNodeStyle}];`);
+        }
+        result.push('');
     }
 
     result.push('    // edges between files');
@@ -257,7 +269,7 @@ digraph G {
     }
     result.push('');
 
-    if (includePackages) {
+    if (packageStyle !== 'omit') {
         result.push('    // edges from files to packages');
         for (let node of fileNodes) {
             for (let dep of node.packageDeps) {
