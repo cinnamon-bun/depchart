@@ -39,6 +39,9 @@ let main = () => {
         process.exit(1);
     }
 
+    // discard directories
+    sourceFiles = sourceFiles.filter(path => fs.lstatSync(path).isFile());
+
     sourceFiles.sort();
 
     // apply exclusions
