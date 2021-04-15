@@ -1,0 +1,49 @@
+
+digraph G {
+    //splines=line;
+    //splines=polyline;
+    splines=true;
+    rankdir=TB;
+    //newrank=true;
+    compound=true;
+    graph [fontname = "helvetica"];  // dpi=72
+    node [fontname = "helvetica"];
+    edge [fontname = "helvetica"];
+    
+    // files in their folder clusters
+        "src/cli.ts" [label="cli.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/lib.ts" [label="lib.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/shallower-file.ts" [label="shallower-file.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/util.ts" [label="util.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+
+        subgraph cluster8463379536 {
+            label=<<b>subfolder</b>>;
+            style="rounded,filled";
+            fillcolor=bisque;
+            color=bisque4;
+            penwidth=2;
+                
+            "src/subfolder/deeper-file.ts" [label="deeper-file.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        }
+
+    // packages not in their own cluster
+        "fs" [shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4];
+        "child_process" [shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4];
+        "argparse" [shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4];
+        "path" [shape=box3d, style=filled, fillcolor=cornsilk3, color=cornsilk4];
+
+    // edges between files
+    "src/cli.ts" -> "src/lib.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/util.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/subfolder/deeper-file.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/shallower-file.ts" [penwidth=2; color=darkslategray4];
+    "src/subfolder/deeper-file.ts" -> "src/shallower-file.ts" [penwidth=2; color=darkslategray4];
+
+    // edges from files to packages
+    "src/cli.ts" -> "fs" [penwidth=1.5; style=dashed, color=cornsilk4, weight=1];
+    "src/cli.ts" -> "child_process" [penwidth=1.5; style=dashed, color=cornsilk4, weight=1];
+    "src/cli.ts" -> "argparse" [penwidth=1.5; style=dashed, color=cornsilk4, weight=1];
+    "src/lib.ts" -> "fs" [penwidth=1.5; style=dashed, color=cornsilk4, weight=1];
+    "src/lib.ts" -> "path" [penwidth=1.5; style=dashed, color=cornsilk4, weight=1];
+
+}

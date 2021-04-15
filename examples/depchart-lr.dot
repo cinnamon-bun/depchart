@@ -1,0 +1,44 @@
+
+digraph G {
+    //splines=line;
+    //splines=polyline;
+    splines=true;
+    rankdir=LR;
+    //newrank=true;
+    compound=true;
+    graph [fontname = "helvetica"];  // dpi=72
+    node [fontname = "helvetica"];
+    edge [fontname = "helvetica"];
+    
+    // files in their folder clusters
+
+    subgraph cluster2234810747 {
+        label=<<b>src</b>>;
+        style="rounded";
+        color=bisque4;
+        penwidth=2;
+                
+        "src/cli.ts" [label="cli.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/lib.ts" [label="lib.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/shallower-file.ts" [label="shallower-file.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        "src/util.ts" [label="util.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+
+        subgraph cluster5723981287 {
+            label=<<b>subfolder</b>>;
+            style="rounded,filled";
+            fillcolor=bisque;
+            color=bisque4;
+            penwidth=2;
+                
+            "src/subfolder/deeper-file.ts" [label="deeper-file.ts", shape=rectangle; style="rounded,filled"; color=darkslategray3];
+        }
+    }
+
+    // edges between files
+    "src/cli.ts" -> "src/lib.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/util.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/subfolder/deeper-file.ts" [penwidth=2; color=darkslategray4];
+    "src/lib.ts" -> "src/shallower-file.ts" [penwidth=2; color=darkslategray4];
+    "src/subfolder/deeper-file.ts" -> "src/shallower-file.ts" [penwidth=2; color=darkslategray4];
+
+}
